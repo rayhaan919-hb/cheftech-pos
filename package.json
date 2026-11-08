@@ -1,0 +1,39 @@
+{
+  "name": "cheftech-pos",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE",
+  "version": "1.0.0",
+  "description": "ChefTech Offline-First Restaurant POS with Supabase Cloud Sync",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rayhaan919-hb/cheftech-pos.git"
+  },
+  "homepage": "https://github.com/rayhaan919-hb/cheftech-pos#readme",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "test": "vitest run",
+    "lint": "oxlint",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "dexie": "^4.4.6",
+    "lucide-react": "^1.60.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "autoprefixer": "^10.6.1",
+    "oxlint": "^1.88.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.4",
+    "vitest": "^4.1.12"
+  }
+}

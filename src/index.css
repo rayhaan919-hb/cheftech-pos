@@ -1,0 +1,154 @@
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
+:root {
+  /* Fellow DESIGN.md Tokens */
+  --fellow-primary: #2941e0;
+  --fellow-primary-violet: #795afa;
+  --fellow-primary-violet-light: #c5b9fa;
+  --fellow-primary-indigo: #742afb;
+  --fellow-hero-canvas: #000524;
+  --fellow-canvas: #ffffff;
+  --fellow-surface-1: #e0edff;
+  --fellow-surface-2: #eff6ff;
+  --fellow-hairline: #b4c4cc;
+  --fellow-hairline-light: #d4d4d8;
+  --fellow-ink: #000000;
+  --fellow-ink-muted: #273238;
+  --fellow-ink-subtle: #526066;
+  --fellow-ink-faint: #616f75;
+  --fellow-gold: #f7ba02;
+  --fellow-success: #00574a;
+
+  /* Mapped POS UI variables */
+  --ui-bg: #f8fafd;
+  --ui-panel: #ffffff;
+  --ui-panel-raised: #eff6ff;
+  --ui-border: #d4d4d8;
+  --ui-text: #000000;
+  --ui-muted: #526066;
+  --ui-accent: #2941e0;
+  --ui-accent-soft: #eff6ff;
+  --ui-success: #10b981;
+  --ui-warning: #f59e0b;
+  --ui-danger: #ef4444;
+}
+
+.dark {
+  --ui-bg: #000524;
+  --ui-panel: #07103c;
+  --ui-panel-raised: #111c4e;
+  --ui-border: #273238;
+  --ui-text: #ffffff;
+  --ui-muted: #b4c4cc;
+  --ui-accent: #795afa;
+  --ui-accent-soft: #1e295b;
+  --ui-success: #22c55e;
+  --ui-warning: #f7ba02;
+  --ui-danger: #f87171;
+}
+
+body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--ui-bg);
+  color: var(--ui-text);
+  margin: 0;
+  padding: 0;
+  letter-spacing: 0;
+}
+
+/* Editorial-functional split: Plus Jakarta Sans (Sharp Grotesk substitute) for headings, Inter for body */
+h1, h2, h3, h4, .font-display {
+  font-family: "Plus Jakarta Sans", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* Override browser default #0000ee anchor color per design.md */
+a {
+  color: var(--fellow-primary);
+  text-decoration: none;
+}
+
+/* Menu card surface styled with Fellow 16px card radius & surface-1 periwinkle border */
+.menu-item-card {
+  background-color: var(--fellow-canvas);
+  border-color: var(--fellow-surface-1);
+  border-radius: 16px;
+}
+
+.menu-item-card:hover {
+  border-color: var(--fellow-primary-violet-light);
+  box-shadow: 0 4px 14px rgba(41, 65, 224, 0.08);
+  transform: translateY(-1px);
+}
+
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: var(--fellow-surface-2);
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--fellow-hairline);
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--fellow-ink-subtle);
+}
+
+/* Modal Overlay & Dialog System */
+[data-modal] {
+  background: rgba(0, 5, 36, 0.55) !important;
+  backdrop-filter: blur(4px);
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  padding: 1.5rem 1rem !important;
+  overflow-y: auto !important;
+  box-sizing: border-box !important;
+}
+
+[data-modal].hidden {
+  display: none !important;
+}
+
+[data-modal] > div {
+  max-height: 80vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  margin: auto !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.modal-header {
+  flex-shrink: 0 !important;
+}
+
+.modal-footer {
+  flex-shrink: 0 !important;
+}
+
+.modal-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+.touch-target {
+  min-height: 2.5rem;
+  min-width: 2.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
