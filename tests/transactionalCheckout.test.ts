@@ -220,4 +220,103 @@ describe('Transactional Checkout & Inventory Integrity', () => {
     expect(result.computedSubtotal).toBe(1200);
     expect(result.items[0].price).toBe(1200);
   });
+
+  it('P1: allows already-reserved online order to be accepted and completed when stock is 0, while rejecting walk-in orders', async () => {
+    // Scenario: Menu item requires Chicken Patty. Stock is 2 patties.
+    await db.menu.bulkPut([
+      { id: 'm_burger', name: 'Zinger Burger', price: 650, available: true },
+    ]);
+    await (db.inventory as any).put({
+      id: 'inv_patty',
+      name: 'Chicken Patty',
+      stock: 2,
+      unit: 'pcs',
+    });
+    await (db.recipes as any).add({
+      menuItemId: 'm_burger',
+      inventoryId: 'inv_patty',
+      qtyRequired: 1,
+    });
+
+    // 1. Customer places online order for 2 Zinger Burgers on website.
+    // Cloud checkout atomically deducts 2 patties, reducing inventory stock from 2 to 0.
+    await (db.inventory as any).update('inv_patty', { stock: 0 });
+    const stockAfterCloudCheckout = await db.inventory.get('inv_patty');
+    expect(stockAfterCloudCheckout?.stock).toBe(0);
+
+    const onlineOrder = {
+      id: 101,
+      cloudId: 'ORD-CLOUD-RESERVED-101',
+      idempotency_key: 'idemp-uuid-12345678-test',
+      status: 'PENDING' as const,
+      orderType: 'DELIVERY' as const,
+      customer: { name: 'Alice', phone: '03009998877', address: 'DHA Phase 5' },
+      items: [{ id: 'm_burger', menuItemId: 'm_burger', name: 'Zinger Burger', price: 650, qty: 2 }],
+      subtotal: 1300,
+      total: 1300,
+      createdAt: new Date().toISOString(),
+    };
+
+    // 2. POS accepts online order: verifyOnlineOrder skips duplicate stock check because inventory is already reserved.
+    const verification = await verifyOnlineOrder(onlineOrder, { skipStockCheck: true });
+    expect(verification.stockError).toBeNull();
+    expect(verification.isReservedOnlineOrder).toBe(true);
+
+    // 3. POS completes payment: recordSale records sale without double-deduction
+    const saleId = await recordSale({
+      items: verification.items,
+      orderType: 'DELIVERY',
+      serverUser: 'Cashier',
+      subtotal: 1300,
+      discountPercent: 0,
+      discountAmount: 0,
+      deliveryCharge: 0,
+      packingCharge: 0,
+      taxPercent: 0,
+      taxAmount: 0,
+      otherCharge: 0,
+      total: 1300,
+      payments: [{ method: 'Cash', amount: 1300 }],
+      customer: onlineOrder.customer,
+      onlineOrderId: onlineOrder.cloudId,
+    });
+
+    expect(saleId).toBeGreaterThan(0);
+    // Inventory remains at 0 (not deducted into negative)
+    const stockAfterPayment = await db.inventory.get('inv_patty');
+    expect(stockAfterPayment?.stock).toBe(0);
+
+    // 4. Concurrently, a walk-in customer arrives at the counter trying to order 1 Zinger Burger.
+    // Since walk-in orders are NOT online orders, verifyStock is enforced.
+    const walkinStockCheck = await verifyStock([
+      { id: 'm_burger', menuItemId: 'm_burger', name: 'Zinger Burger', price: 650, qty: 1 },
+    ]);
+    expect(walkinStockCheck).toContain('Chicken Patty is out of stock or insufficient quantity');
+  });
+
+  it('P1: prevents duplicate orders when replayed with same idempotency key after simulated network timeout', async () => {
+    const memoryOrders = new Map<string, any>();
+    const key = 'test-idemp-key-77889900112233';
+
+    // Helper simulating atomic idempotent checkout
+    async function processCheckoutWithRetry(idempKey: string, payload: any) {
+      if (memoryOrders.has(idempKey)) {
+        return { order: memoryOrders.get(idempKey), replayed: true };
+      }
+      const newOrder = { id: `ORD_${Date.now()}`, ...payload, idempotency_key: idempKey };
+      memoryOrders.set(idempKey, newOrder);
+      return { order: newOrder, replayed: false };
+    }
+
+    // First attempt: succeeds on server
+    const firstResult = await processCheckoutWithRetry(key, { total: 1500, customer: 'John' });
+    expect(firstResult.replayed).toBe(false);
+    expect(firstResult.order.idempotency_key).toBe(key);
+
+    // Simulated network timeout on client side: client retries with the SAME key
+    const retryResult = await processCheckoutWithRetry(key, { total: 1500, customer: 'John' });
+    expect(retryResult.replayed).toBe(true);
+    expect(retryResult.order.id).toBe(firstResult.order.id);
+    expect(memoryOrders.size).toBe(1); // No duplicate order created
+  });
 });

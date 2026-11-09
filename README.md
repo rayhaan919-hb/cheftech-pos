@@ -111,7 +111,7 @@ Public user signups strictly default to the `CUSTOMER` role. To establish the in
    ```sql
    SELECT public.bootstrap_initial_owner('your-owner-email@example.com');
    ```
-3. This procedure locks the `profiles` table, elevates the account to `OWNER`, records an entry in `public.audit_logs`, and permanently locks the bootstrap mechanism against any subsequent attempts.
+3. This procedure acquires a global PostgreSQL transaction advisory lock (`pg_advisory_xact_lock`), verifies that no active OWNER exists, elevates the account to `OWNER`, records an entry in `public.audit_logs`, and permanently rejects any subsequent attempts. Execution privileges are restricted to `service_role` and PostgreSQL superusers (normal authenticated clients cannot invoke it).
 4. For detailed staff and PIN configuration, see [**Owner Setup Guide**](./docs/OWNER_SETUP.md).
 
 ---

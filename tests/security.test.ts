@@ -334,7 +334,8 @@ describe('security & audit fixes', () => {
     const analytics = await getAnalytics('day');
     expect(analytics.topItems[0]?.metric).toBe(1); // 2 sold minus 1 refunded = 1 net sold
 
-    const todayStr = nowIso.slice(0, 10);
+    const d = new Date();
+    const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const pnl = await getPnl(todayStr, todayStr);
     expect(pnl.sales).toBe(800);
     expect(pnl.expenses).toBe(200);

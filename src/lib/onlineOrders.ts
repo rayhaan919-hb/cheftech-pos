@@ -105,13 +105,28 @@ export interface OnlineOrderVerification {
   unavailableItems: string[];
   stockError: string | null;
   belowDeliveryMinimum: boolean;
+  isReservedOnlineOrder: boolean;
 }
 
 /**
- * S-04, M-02, M-07: Re-prices items from local menu, checks `available` flag,
- * verifies ingredient stock via `verifyStock()`, and validates `MIN_DELIVERY_ORDER`.
+ * Checks whether an online order has already had its recipe inventory reserved/consumed
+ * during cloud checkout.
  */
-export async function verifyOnlineOrder(order: OnlineOrder): Promise<OnlineOrderVerification> {
+export function isOrderInventoryReserved(order: Partial<OnlineOrder>): boolean {
+  return Boolean(order.cloudId || order.idempotency_key || (order.id && Number(order.id) > 0));
+}
+
+/**
+ * S-04, M-02, M-07, P1: Re-prices items from local menu, checks `available` flag,
+ * verifies delivery minimum, and checks stock.
+ * When `skipStockCheck` is true or the order is an already-reserved cloud order,
+ * duplicate stock verification is skipped so the POS does not reject orders whose
+ * ingredients were already consumed during website checkout.
+ */
+export async function verifyOnlineOrder(
+  order: OnlineOrder,
+  options: { skipStockCheck?: boolean } = {}
+): Promise<OnlineOrderVerification> {
   const items = await resolveOrderToCart(order);
   const unavailableItems: string[] = [];
 
@@ -131,7 +146,11 @@ export async function verifyOnlineOrder(order: OnlineOrder): Promise<OnlineOrder
   );
   const expectedSubtotal = Number(order.subtotal) > 0 ? Number(order.subtotal) : reportedItemsTotal;
   const priceMismatch = Math.abs(computedSubtotal - expectedSubtotal) > 0.01;
-  const stockError = await verifyStock(items);
+
+  const isReserved = isOrderInventoryReserved(order);
+  const shouldSkipStock = options.skipStockCheck ?? isReserved;
+  const stockError = shouldSkipStock ? null : await verifyStock(items);
+
   const couponDisc = Math.max(0, Number(order.discountAmount) || 0);
   const loyaltyDisc = Math.max(0, Number(order.loyaltyDiscount ?? order.loyaltyRedeemPoints) || 0);
   const computedNetTotal = Math.max(0, computedSubtotal - couponDisc - loyaltyDisc);
@@ -146,5 +165,6 @@ export async function verifyOnlineOrder(order: OnlineOrder): Promise<OnlineOrder
     unavailableItems,
     stockError,
     belowDeliveryMinimum,
+    isReservedOnlineOrder: isReserved,
   };
 }

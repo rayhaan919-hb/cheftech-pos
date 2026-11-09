@@ -49,8 +49,9 @@ export function OnlineOrdersModal({ username, notify, onClose, onAccept }: {
       return;
     }
 
-    // S-04, M-02, M-07: Verify authoritative POS menu prices, item availability, stock, and delivery minimum
-    const check = await verifyOnlineOrder(order);
+    // S-04, M-02, M-07, P1: Verify authoritative POS menu prices, item availability, and delivery minimum.
+    // Skip duplicate stock check for online orders as inventory was already reserved/deducted during cloud checkout.
+    const check = await verifyOnlineOrder(order, { skipStockCheck: true });
 
     if (check.unavailableItems.length > 0) {
       notify(`Unavailable item(s) in order: ${check.unavailableItems.join(', ')}. Reject or adjust before checkout.`);

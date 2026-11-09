@@ -263,10 +263,15 @@ function App() {
       return;
     }
 
-    const stockError = await verifyStock(cart);
-    if (stockError) {
-      notify(stockError);
-      return;
+    // P1: Skip duplicate stock verification for already-reserved online orders.
+    // Retain normal stock verification for walk-in, dine-in, and standard POS orders.
+    const isOnlineReservedOrder = Boolean(activeOnlineOrder);
+    if (!isOnlineReservedOrder) {
+      const stockError = await verifyStock(cart);
+      if (stockError) {
+        notify(stockError);
+        return;
+      }
     }
 
     const tableNumber = charges.orderType === 'DINE_IN' ? charges.tableNumber : undefined;
@@ -291,7 +296,7 @@ function App() {
         payments,
         customer: customer.phone ? customer : undefined,
         deliveryInfo: charges.orderType === 'DELIVERY' ? customer : undefined,
-        onlineOrderId: activeOnlineOrder?.cloudId ?? null,
+        onlineOrderId: activeOnlineOrder ? (activeOnlineOrder.cloudId || String(activeOnlineOrder.id)) : null,
       });
       closeOnlineOrder(saleId);
       const sale: Sale = {

@@ -297,18 +297,11 @@ export async function completeFirstRunOwnerSetup(input: {
       if (signUpRes.ok) {
         const data = await signUpRes.json();
         uid = data.user?.id || data.id;
-        const token = data.access_token;
         if (data.access_token && data.refresh_token) {
           rememberToken(data.access_token, data.refresh_token, Number(data.expires_in || 3600));
         }
-        // Phase 2.1: Elevate initial owner via trusted server-side procedure bootstrap_initial_owner
-        if (token) {
-          await fetch(`${restBaseUrl(cfg)}/rpc/bootstrap_initial_owner`, {
-            method: 'POST',
-            headers: supabaseHeaders(cfg, token),
-            body: JSON.stringify({ p_email: email }),
-          }).catch(() => undefined);
-        }
+        // P0: bootstrap_initial_owner() is strictly restricted to trusted administrative processes
+        // (service_role or Supabase SQL Editor). Normal authenticated signups cannot elevate themselves.
       }
     } catch {
       // Cloud signup is optional during offline local setup

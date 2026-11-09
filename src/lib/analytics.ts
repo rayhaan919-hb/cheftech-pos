@@ -189,8 +189,12 @@ export interface PnlReport {
 
 export async function getPnl(startDate: string, endDate: string): Promise<PnlReport> {
   const [sales, expenses] = await Promise.all([db.sales.toArray(), db.expenses.toArray()]);
-  const from = startDate ? new Date(startDate).setHours(0, 0, 0, 0) : -Infinity;
-  const to = endDate ? new Date(endDate).setHours(23, 59, 59, 999) : Infinity;
+  const from = startDate
+    ? new Date(startDate.includes('T') ? startDate : `${startDate}T00:00:00`).getTime()
+    : -Infinity;
+  const to = endDate
+    ? new Date(endDate.includes('T') ? endDate : `${endDate}T23:59:59.999`).getTime()
+    : Infinity;
   const between = (stamp: string) => {
     const at = new Date(stamp).getTime();
     return at >= from && at <= to;

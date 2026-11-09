@@ -153,6 +153,7 @@ export interface Sale {
 export interface OnlineOrder {
   id?: number;
   cloudId?: string;
+  idempotency_key?: string;
   createdAt: string;
   customer: CustomerInfo;
   orderType: OrderType;
