@@ -91,18 +91,22 @@ export async function recordSale(input: SaleInput): Promise<number> {
     };
     saleId = (await db.sales.add(sale)) as number;
 
-    for (const cartItem of sale.items) {
-      const recipes = await db.recipes
-        .where('menuItemId')
-        .equals(cartItem.menuItemId || cartItem.id)
-        .toArray();
-      for (const recipe of recipes) {
-        const ingredient = await db.inventory.get(recipe.inventoryId);
-        if (!ingredient) continue;
-        await db.inventory.update(recipe.inventoryId, {
-          stock: Math.max(0, (Number(ingredient.stock) || 0) - recipe.qtyRequired * cartItem.qty),
-        });
-        touchedStock.add(recipe.inventoryId);
+    // S-04 / M-07: Website online orders already had recipe inventory deducted atomically during checkout.
+    // Only deduct recipe stock locally if this is NOT an online order checkout, preventing double deduction.
+    if (!sale.onlineOrderId) {
+      for (const cartItem of sale.items) {
+        const recipes = await db.recipes
+          .where('menuItemId')
+          .equals(cartItem.menuItemId || cartItem.id)
+          .toArray();
+        for (const recipe of recipes) {
+          const ingredient = await db.inventory.get(recipe.inventoryId);
+          if (!ingredient) continue;
+          await db.inventory.update(recipe.inventoryId, {
+            stock: Math.max(0, (Number(ingredient.stock) || 0) - recipe.qtyRequired * cartItem.qty),
+          });
+          touchedStock.add(recipe.inventoryId);
+        }
       }
     }
 

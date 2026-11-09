@@ -356,6 +356,10 @@ export function syncNow(): Promise<boolean> {
     const snap = await getSnapshot();
     let changed = false;
     try {
+      // 1. Push any local offline sales before pulling server updates
+      await pushPendingSales();
+
+      // 2. Pull server updates
       if (await pullCategories(snap)) changed = true;
       if (await pullMenu(snap)) changed = true;
       if (await pullInventory(snap)) changed = true;
@@ -373,7 +377,111 @@ export function syncNow(): Promise<boolean> {
   return inFlight;
 }
 
+/** Pushes any local sales recorded while offline. */
+export async function pushPendingSales(): Promise<number> {
+  const token = await getAccessToken();
+  const config = getSyncConfig();
+  if (!token || !isConfigured(config)) return 0;
+
+  let pushed = 0;
+  try {
+    const pending = await db.sales.filter((s) => !s.cloudId).toArray();
+    for (const sale of pending) {
+      if (!sale.id) continue;
+      const payload = {
+        id: sale.id,
+        date: sale.timestamp,
+        items: sale.items,
+        total: sale.total,
+        subtotal: sale.subtotal,
+        discount: sale.discountAmount,
+        discount_type: 'PERCENT',
+        discount_val: sale.discountPercent,
+        loyalty_redeem_amt: sale.loyaltyDiscount ?? 0,
+        loyalty_redeem_pts: sale.loyaltyRedeemPoints ?? 0,
+        payment_method: sale.payments?.[0]?.method || 'Cash',
+        order_type: sale.orderType,
+        customer_name: sale.customer?.name || null,
+        customer_phone: sale.customer?.phone || null,
+        customer_address: sale.customer?.address || null,
+        cashier: sale.serverUser,
+        updated_at: new Date().toISOString(),
+      };
+      const res = await rest('POST', 'sales', payload, {
+        Prefer: 'resolution=merge-duplicates,return=representation',
+      });
+      if (res) {
+        await db.sales.update(sale.id, { cloudId: String(payload.id) });
+        pushed++;
+      }
+    }
+  } catch {
+    // Non-blocking offline queue flush
+  }
+  return pushed;
+}
+
+export async function getPendingSyncCount(): Promise<{ sales: number }> {
+  try {
+    const count = await db.sales.filter((s) => !s.cloudId).count();
+    return { sales: count };
+  } catch {
+    return { sales: 0 };
+  }
+}
+
 let timer: ReturnType<typeof setInterval> | null = null;
+let realtimeWs: WebSocket | null = null;
+
+function connectRealtime(): void {
+  const config = getSyncConfig();
+  if (!isConfigured(config) || !navigator.onLine) return;
+  if (realtimeWs && (realtimeWs.readyState === WebSocket.OPEN || realtimeWs.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+
+  try {
+    const wsUrl = `${config.supabaseUrl.replace(/^http/i, 'ws')}/realtime/v1/websocket?apikey=${encodeURIComponent(config.supabaseAnonKey)}&vsn=1.0.0`;
+    realtimeWs = new WebSocket(wsUrl);
+
+    realtimeWs.onopen = () => {
+      // Join realtime channel for online orders
+      realtimeWs?.send(
+        JSON.stringify({
+          topic: 'realtime:public:online_orders',
+          event: 'phx_join',
+          payload: { config: { postgres_changes: [{ event: '*', schema: 'public', table: 'online_orders' }] } },
+          ref: '1',
+        })
+      );
+    };
+
+    realtimeWs.onmessage = (msg) => {
+      try {
+        const data = JSON.parse(msg.data);
+        if (data.event === 'postgres_changes') {
+          void syncNow();
+        }
+      } catch {
+        // ignore parse error
+      }
+    };
+
+    realtimeWs.onerror = () => {
+      try {
+        realtimeWs?.close();
+      } catch {
+        // ignore
+      }
+    };
+
+    realtimeWs.onclose = () => {
+      realtimeWs = null;
+    };
+  } catch {
+    realtimeWs = null;
+  }
+}
 
 export function startSync(): void {
   if (timer) return;
@@ -382,6 +490,7 @@ export function startSync(): void {
     return;
   }
   void syncNow();
+  connectRealtime();
   timer = setInterval(() => void syncNow(), POLL_MS);
   window.addEventListener('online', wake);
 }
@@ -389,11 +498,20 @@ export function startSync(): void {
 export function stopSync(): void {
   if (timer) clearInterval(timer);
   timer = null;
+  if (realtimeWs) {
+    try {
+      realtimeWs.close();
+    } catch {
+      // ignore
+    }
+    realtimeWs = null;
+  }
   window.removeEventListener('online', wake);
 }
 
 function wake(): void {
   void syncNow();
+  connectRealtime();
 }
 
 const pushes = new Map<string, Promise<void>>();

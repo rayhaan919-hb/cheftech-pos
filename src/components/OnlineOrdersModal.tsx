@@ -44,6 +44,11 @@ export function OnlineOrdersModal({ username, notify, onClose, onAccept }: {
   async function accept(order: OnlineOrder) {
     if (!order.id) return;
 
+    if (order.saleId) {
+      notify(`Order #${order.id} has already been checked out as Sale #${order.saleId}.`);
+      return;
+    }
+
     // S-04, M-02, M-07: Verify authoritative POS menu prices, item availability, stock, and delivery minimum
     const check = await verifyOnlineOrder(order);
 
@@ -86,6 +91,10 @@ export function OnlineOrdersModal({ username, notify, onClose, onAccept }: {
     if (!order.id) return;
     const next = nextStatus(order);
     if (!next) return;
+    if (next === 'COMPLETED' && !order.saleId) {
+      notify(`Order #${order.id} must be checked out into a POS sale before completing. Click "Accept" to load into cart.`);
+      return;
+    }
     await setOrderStatus(order.id, next, username);
     notify(`Order #${order.id}: ${STATUS_LABEL[next]}.`);
   }

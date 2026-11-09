@@ -57,6 +57,17 @@
 
 ---
 
+## Documentation Index
+
+Comprehensive production documentation is located in the [`docs/`](./docs) directory:
+- [**Installation & Deployment Guide**](./docs/INSTALLATION.md) — Step-by-step setup for development, staging, and production.
+- [**Owner Account & Staff Setup**](./docs/OWNER_SETUP.md) — Secure Owner bootstrap procedure, role hierarchy, and PIN management.
+- [**Supabase Configuration Guide**](./docs/SUPABASE_SETUP.md) — Database schema, migrations, RLS policies, and Edge Functions deployment.
+- [**Security & Threat Model**](./docs/SECURITY.md) — Authentication architecture, HMAC sessions, anti-escalation triggers, and audit logging.
+- [**Backup & Disaster Recovery**](./docs/BACKUP_AND_RECOVERY.md) — Database dumps, IndexedDB exports, point-in-time recovery, and restore procedures.
+
+---
+
 ## Supabase Backend Setup (Database, RLS & Edge Functions)
 
 Both `cheftech-pos` and `cheftech-website` share the same Supabase project and ship with identical `supabase/` directories.
@@ -64,12 +75,16 @@ Both `cheftech-pos` and `cheftech-website` share the same Supabase project and s
 ### 1. Apply the Database Schema & RLS Policies
 
 1. Open your **Supabase Dashboard** → **SQL Editor**.
-2. Open [`supabase/migrations/20261108000000_initial_schema_and_rls.sql`](./supabase/migrations/20261108000000_initial_schema_and_rls.sql), copy its entire contents, and run it in the SQL Editor.
-3. This single migration creates:
+2. Run the migrations in sequence:
+   - [`supabase/migrations/20261108000000_initial_schema_and_rls.sql`](./supabase/migrations/20261108000000_initial_schema_and_rls.sql)
+   - [`supabase/migrations/20261109000000_security_owner_bootstrap_and_checkout.sql`](./supabase/migrations/20261109000000_security_owner_bootstrap_and_checkout.sql)
+3. These migrations create:
    - The `user_role` enum (`OWNER`, `MANAGER`, `CASHIER`, `WAITER`, `CUSTOMER`).
    - All **22 tables** (`profiles`, `categories`, `menu_items`, `inventory`, `recipes`, `coupons`, `online_orders`, `online_order_items`, `sales`, `sale_items`, `refunds`, `customers`, `held_orders`, `table_orders`, `suppliers`, `expenses`, `staff`, `shifts`, `audit_logs`, `settings`, `banners`, `loyalty_rewards`).
    - Strict **Row-Level Security (RLS)** on every table (`ALTER TABLE ... ENABLE ROW LEVEL SECURITY;`).
-   - `trg_enforce_profile_security` trigger that prevents any non-owner from promoting their own role (`profiles.role`) or tampering with `loyalty_points` / `order_count`.
+   - Anti-escalation triggers preventing non-owners from modifying roles.
+   - The atomic checkout stored procedure `public.process_online_order_checkout`.
+   - The secure owner bootstrap function `public.bootstrap_initial_owner`.
 
 ### 2. Deploy the 4 Supabase Edge Functions
 
@@ -89,11 +104,15 @@ supabase functions deploy track-order
 
 ### 3. Bootstrap Your First Cloud Owner Account
 
-1. Sign up your owner email via the POS Cloud Setup or Supabase Auth.
-2. When no `OWNER` exists yet in `public.profiles`, the `trg_enforce_profile_security` trigger allows the very first user to be assigned `role = 'OWNER'`. You can also promote an user manually in the Supabase SQL Editor:
+Public user signups strictly default to the `CUSTOMER` role. To establish the initial Owner account securely:
+
+1. Register your owner account via Supabase Auth or the POS Cloud Setup modal.
+2. In the **Supabase Dashboard → SQL Editor**, execute the bootstrap procedure:
    ```sql
-   UPDATE public.profiles SET role = 'OWNER' WHERE email = 'your-owner@example.com';
+   SELECT public.bootstrap_initial_owner('your-owner-email@example.com');
    ```
+3. This procedure locks the `profiles` table, elevates the account to `OWNER`, records an entry in `public.audit_logs`, and permanently locks the bootstrap mechanism against any subsequent attempts.
+4. For detailed staff and PIN configuration, see [**Owner Setup Guide**](./docs/OWNER_SETUP.md).
 
 ---
 

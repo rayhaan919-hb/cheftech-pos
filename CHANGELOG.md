@@ -2,6 +2,35 @@
 
 All notable changes to **ChefTech POS** are documented in this file.
 
+## [1.1.0] - 2026-11-09
+
+### Security & Architecture Hardening
+- **Secure Initial Owner Account Creation**:
+  - Replaced metadata-based role assignment in `handle_new_user()` trigger with strict default `CUSTOMER` role, ignoring any client-supplied `role: "OWNER"` in `raw_user_meta_data`.
+  - Implemented `public.bootstrap_initial_owner(target_email)` procedure with `FOR UPDATE` lock on `profiles` to elevate only the very first owner and permanently reject any subsequent calls once an Owner exists.
+  - Enforced database-level protection in `enforce_profile_security()` preventing deactivation or demotion of the last active owner and automatically logging all role alterations to `public.audit_logs`.
+- **Atomic Concurrency-Safe Checkout (`public.process_online_order_checkout`)**:
+  - Implemented database stored procedure with deadlock-free inventory row locking (`ORDER BY id FOR UPDATE`) preventing race conditions and inventory overselling.
+  - Added atomic coupon validation, clamping (0-100%), and usage incrementing.
+  - Added atomic loyalty points balance verification and deduction.
+  - Added strict server-side minimum delivery order enforcement.
+- **Idempotency Protection**:
+  - Added `idempotency_key` (UUID) with `UNIQUE` constraint to `online_orders` to eliminate duplicate charges or double orders on retry.
+- **Recipe Double-Deduction Elimination**:
+  - Fixed `recordSale` in `src/lib/sales.ts` to skip local recipe inventory deduction when `sale.onlineOrderId` is set, since ingredients were already deducted by PostgreSQL during checkout.
+- **Offline Synchronization Hardening**:
+  - Added `pushPendingSales()` to `src/lib/sync.ts` ensuring all sales recorded offline in IndexedDB are automatically scanned and synchronized to Supabase when network connectivity returns.
+  - Added `getPendingSyncCount()` for UI badge indicators.
+  - Integrated Supabase Realtime WebSocket channel for instant online order notifications with graceful fallback to 20-second polling.
+- **Edge Function Hardening**:
+  - Replaced wildcard CORS headers with explicit configurable `ALLOWED_ORIGINS` validation.
+  - Added strict Bearer token authentication returning `401 Unauthorized` on invalid tokens instead of silently falling back to guest mode.
+- **Automated Testing & CI/CD**:
+  - Added comprehensive test suites: `tests/transactionalCheckout.test.ts` (deadlock locking, stock checks, double-deduction prevention) and `tests/offlineSync.test.ts` (offline queuing and connectivity sync).
+  - Added GitHub Actions CI workflow (`.github/workflows/ci.yml`) running lint, type-check, vitest (62 tests), and Vite build.
+- **Documentation**:
+  - Added enterprise guides: `docs/INSTALLATION.md`, `docs/OWNER_SETUP.md`, `docs/SUPABASE_SETUP.md`, `docs/SECURITY.md`, and `docs/BACKUP_AND_RECOVERY.md`.
+
 ## [1.0.0] - 2026-11-08
 
 ### Added
