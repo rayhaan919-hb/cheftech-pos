@@ -157,6 +157,11 @@ export interface OnlineOrder {
   customer: CustomerInfo;
   orderType: OrderType;
   items: CartItem[];
+  subtotal?: number;
+  discountAmount?: number;
+  couponCode?: string | null;
+  loyaltyRedeemPoints?: number;
+  loyaltyDiscount?: number;
   total: number;
   status: OnlineOrderStatus;
   note?: string;

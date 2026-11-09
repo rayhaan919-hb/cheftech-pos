@@ -160,12 +160,13 @@ function App() {
   useEffect(() => {
     let active = true;
     getCustomer(customer.phone).then((found) => {
-      if (active) setLoyaltyBalance(found?.loyaltyPoints || 0);
+      const onlinePts = Math.max(0, Number(activeOnlineOrder?.loyaltyRedeemPoints ?? activeOnlineOrder?.loyaltyDiscount) || 0);
+      if (active) setLoyaltyBalance(Math.max(found?.loyaltyPoints || 0, onlinePts));
     });
     return () => {
       active = false;
     };
-  }, [customer.phone]);
+  }, [customer.phone, activeOnlineOrder]);
 
   const requireOwnerPin = useCallback(
     async (label: string, run: () => void) => {
@@ -257,7 +258,7 @@ function App() {
       notify('Delivery orders need a customer phone number.');
       return;
     }
-    if (charges.orderType === 'DELIVERY' && totals.subtotal - totals.discountAmount < getMinDeliveryOrder()) {
+    if (charges.orderType === 'DELIVERY' && totals.subtotal - totals.discountAmount - totals.loyaltyDiscount < getMinDeliveryOrder()) {
       notify(`Minimum order total for delivery is ${formatAmount(getMinDeliveryOrder())}.`);
       return;
     }
@@ -308,11 +309,16 @@ function App() {
         taxPercent: charges.taxPercent,
         taxAmount: totals.taxAmount,
         otherCharge: totals.otherCharge,
+        loyaltyRedeemPoints: charges.loyaltyPoints,
+        loyaltyDiscount: totals.loyaltyDiscount,
         total: totals.grandTotal,
         payments,
         customer: customer.phone ? customer : undefined,
         deliveryInfo: charges.orderType === 'DELIVERY' ? customer : undefined,
-        totalReceived: totals.grandTotal,
+        totalReceived: payments.reduce(
+          (sum, p) => sum + (p.method === 'Cash' && p.cashGiven != null ? p.cashGiven : p.amount),
+          0,
+        ),
         totalChange: payments.reduce((sum, p) => sum + (Number(p.change) || 0), 0),
       };
       resetOrder();
@@ -591,10 +597,24 @@ function App() {
             notify={notify}
             onClose={() => setOnlineOrdersOpen(false)}
             onAccept={(items, order) => {
+              const itemsSub = items.reduce((sum, i) => sum + Number(i.price) * Number(i.qty), 0);
+              const loyaltyPts = Math.max(0, Number(order.loyaltyRedeemPoints ?? order.loyaltyDiscount) || 0);
+              const explicitCouponDisc = Math.max(0, Number(order.discountAmount) || 0);
+              const inferredDisc =
+                explicitCouponDisc === 0 && loyaltyPts === 0 && Number(order.total) > 0 && Number(order.total) < itemsSub
+                  ? itemsSub - Number(order.total)
+                  : explicitCouponDisc;
+              const discPct = itemsSub > 0 && inferredDisc > 0 ? Math.round((inferredDisc / itemsSub) * 100) : 0;
               setCart(items);
-              setCharges({ ...EMPTY_CHARGES, orderType: order.orderType });
+              setCharges({
+                ...EMPTY_CHARGES,
+                orderType: order.orderType,
+                discountPercent: discPct,
+                discountAmountOverride: inferredDisc > 0 ? inferredDisc : undefined,
+                loyaltyPoints: loyaltyPts,
+              });
               setCustomer(order.customer || {});
-              setLoyaltyBalance(0);
+              setLoyaltyBalance(loyaltyPts);
               setActiveOnlineOrder(order);
             }}
           />

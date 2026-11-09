@@ -19,7 +19,7 @@ export interface PeriodSummary {
   totalDiscounts: number;
 }
 
-const amount = (sale: Sale) => Number(sale.total) || 0;
+const amount = (sale: Sale) => Math.max(0, (Number(sale.total) || 0) - (Number(sale.refundedAmount) || 0));
 
 export async function getPeriodSummary(): Promise<PeriodSummary> {
   const sales = await db.sales.toArray();
@@ -151,9 +151,9 @@ export async function getAnalytics(period: Period, categoryId?: string): Promise
     }
 
     for (const item of sale.items || []) {
-      const qty = Number(item.qty) || 0;
+      const qty = Math.max(0, (Number(item.qty) || 0) - (Number(item.refundedQty) || 0));
       if (qty <= 0) continue;
-      if (categoryId !== undefined && categoryByItem.get(item.menuItemId) !== categoryId) continue;
+      if (categoryId !== undefined && categoryByItem.get(item.menuItemId || item.id) !== categoryId) continue;
       const name = item.name || 'Unnamed item';
       const row = items.get(name) || { name, metric: 0, detail: 0 };
       row.metric += qty;

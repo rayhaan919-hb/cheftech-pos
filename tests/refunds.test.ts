@@ -55,6 +55,21 @@ describe('refunds', () => {
     expect(refundableTotal(discounted)).toBe(1260);
   });
 
+  it('refunds the discounted item price even when delivery charges push total above gross subtotal', () => {
+    // Burger Rs 1,000 - Rs 100 discount (net item paid = Rs 900) + Rs 150 delivery = Rs 1,050 total
+    const deliveryWithDiscount: Sale = {
+      ...sale([line('Zinger', 1000, 1)]),
+      orderType: 'DELIVERY',
+      subtotal: 1000,
+      discountPercent: 10,
+      discountAmount: 100,
+      deliveryCharge: 150,
+      total: 1050,
+    };
+    expect(computeRefund(deliveryWithDiscount, [{ index: 0, qty: 1 }]).amount).toBe(900);
+    expect(refundableTotal(deliveryWithDiscount)).toBe(900);
+  });
+
   it('does not count the same line twice within one refund', () => {
     const result = computeRefund(sale([line('Zinger', 650, 2)]), [
       { index: 0, qty: 2 },

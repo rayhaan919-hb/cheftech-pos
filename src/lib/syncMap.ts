@@ -45,6 +45,25 @@ export function cloudOrderToLocal(cloudId: string, data: Record<string, any>): O
     total: Number(data.total) || 0,
     status: (data.status || 'PENDING') as OnlineOrderStatus,
   };
+  if (data.subtotal !== undefined && data.subtotal !== null) {
+    order.subtotal = Number(data.subtotal) || 0;
+  }
+  const discountAmount = data.discount_amount ?? data.discountAmount;
+  if (discountAmount !== undefined && discountAmount !== null) {
+    order.discountAmount = Number(discountAmount) || 0;
+  }
+  const couponCode = data.coupon_code ?? data.couponCode;
+  if (couponCode) {
+    order.couponCode = String(couponCode);
+  }
+  const loyaltyRedeemPoints = data.loyalty_redeem_points ?? data.loyaltyRedeemPoints;
+  if (loyaltyRedeemPoints !== undefined && loyaltyRedeemPoints !== null) {
+    order.loyaltyRedeemPoints = Number(loyaltyRedeemPoints) || 0;
+  }
+  const loyaltyDiscount = data.loyalty_discount ?? data.loyaltyDiscount;
+  if (loyaltyDiscount !== undefined && loyaltyDiscount !== null) {
+    order.loyaltyDiscount = Number(loyaltyDiscount) || 0;
+  }
   for (const [local, cloud] of Object.values(CLOUD_TIMESTAMP)) {
     const iso = toIso(data[cloud] ?? data[local]);
     if (iso) (order as any)[local] = iso;

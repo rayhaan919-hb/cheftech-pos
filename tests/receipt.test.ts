@@ -209,4 +209,24 @@ describe('receipt', () => {
     expect(decoded).toContain('Jazzcash/Easypaisa');
     expect(decoded).not.toContain('\u00A0');
   });
+
+  it('prints loyalty discount across text, HTML and ESC/POS receipts when points are redeemed', () => {
+    const loyaltySale: Sale = {
+      ...sale,
+      loyaltyRedeemPoints: 50,
+      loyaltyDiscount: 50,
+      total: 1355,
+    };
+    const lines = receiptLines(loyaltySale).map((l) => l.replace(/\u00A0/g, ' '));
+    expect(lines).toContain('Loyalty Discount: -Rs 50');
+
+    const html = receiptDocument(loyaltySale, settings);
+    expect(html).toContain('Loyalty discount');
+
+    const escDecoded = new TextDecoder().decode(
+      generateEscPosReceipt(loyaltySale, { ...settings, printKitchenTicket: false }),
+    );
+    expect(escDecoded).toContain('Loyalty Discount');
+    expect(escDecoded).toContain('-50.00');
+  });
 });

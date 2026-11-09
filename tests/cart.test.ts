@@ -46,6 +46,20 @@ describe('calculateCartTotals', () => {
   it('never returns a negative total', () => {
     expect(calculateCartTotals([], charges).grandTotal).toBe(0);
   });
+
+  it('preserves exact website coupon discountAmountOverride and loyalty points', () => {
+    const totals = calculateCartTotals([item('a', 730, 1)], {
+      ...charges,
+      orderType: 'DELIVERY',
+      discountPercent: 10,
+      discountAmountOverride: 73,
+      loyaltyPoints: 50,
+    });
+    expect(totals.subtotal).toBe(730);
+    expect(totals.discountAmount).toBe(73);
+    expect(totals.loyaltyDiscount).toBe(50);
+    expect(totals.grandTotal).toBe(607);
+  });
 });
 
 describe('cart mutations', () => {

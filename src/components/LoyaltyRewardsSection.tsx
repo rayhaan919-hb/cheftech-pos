@@ -25,7 +25,22 @@ export function LoyaltyRewardsSection({ username, notify }: {
       setPointsRequired('');
       setDiscountType('amount');
       setDiscountValue('');
+    } else {
+      const target = rewards.find((r) => r.id === editingId);
+      if (target) {
+        setName(target.name || '');
+        setDescription(target.description || '');
+        setPointsRequired(String(target.pointsRequired ?? ''));
+        if (target.discountAmount !== undefined) {
+          setDiscountType('amount');
+          setDiscountValue(String(target.discountAmount));
+        } else {
+          setDiscountType('percent');
+          setDiscountValue(String(target.discountPercent ?? ''));
+        }
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingId]);
 
   async function save() {
@@ -93,8 +108,6 @@ export function LoyaltyRewardsSection({ username, notify }: {
     if (editingId === reward.id) setEditingId(null);
   }
 
-  const editing = editingId !== null ? rewards.find((r) => r.id === editingId) : null;
-
   return (
     <div className="space-y-3">
       <h4 className="text-xs font-black uppercase tracking-wider text-gray-700">Loyalty Rewards</h4>
@@ -107,14 +120,14 @@ export function LoyaltyRewardsSection({ username, notify }: {
           <input
             type="text"
             placeholder="Reward name (e.g. Free Dessert)"
-            value={editingId === null ? name : (editing?.name ?? '')}
+            value={name}
             onChange={(e) => setName(e.target.value)}
             className="w-full p-2.5 text-sm border-0 ring-1 ring-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-inner min-h-11"
           />
           <input
             type="text"
             placeholder="Description (optional)"
-            value={editingId === null ? description : (editing?.description ?? '')}
+            value={description}
             onChange={(e) => setDescription(e.target.value)}
             className="w-full p-2.5 text-sm border-0 ring-1 ring-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-inner min-h-11"
           />
@@ -122,14 +135,14 @@ export function LoyaltyRewardsSection({ username, notify }: {
             type="number"
             min={1}
             placeholder="Points required"
-            value={editingId === null ? pointsRequired : (editing?.pointsRequired ?? '')}
+            value={pointsRequired}
             onChange={(e) => setPointsRequired(e.target.value)}
             className="w-32 p-2.5 text-sm border-0 ring-1 ring-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-inner min-h-11"
           />
 
           <div className="flex gap-2 items-center">
             <select
-              value={editingId === null ? discountType : (editing?.discountAmount !== undefined ? 'amount' : 'percent')}
+              value={discountType}
               onChange={(e) => setDiscountType(e.target.value as 'amount' | 'percent')}
               className="px-2 py-1.5 text-xs border-0 ring-1 ring-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 min-h-11"
             >
@@ -141,7 +154,7 @@ export function LoyaltyRewardsSection({ username, notify }: {
               min={0}
               step={discountType === 'percent' ? 1 : 0.01}
               placeholder="Value"
-              value={editingId === null ? discountValue : (editing ? (discountType === 'amount' ? (editing.discountAmount ?? '') : (editing.discountPercent ?? '')) : '')}
+              value={discountValue}
               onChange={(e) => setDiscountValue(e.target.value)}
               className="w-24 p-2.5 text-sm border-0 ring-1 ring-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-inner min-h-11"
             />

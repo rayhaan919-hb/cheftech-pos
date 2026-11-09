@@ -7,6 +7,7 @@ export interface CartCharges {
   orderType: OrderType;
   tableNumber?: string;
   discountPercent: number;
+  discountAmountOverride?: number;
   deliveryCharge: number;
   packingCharge: number;
   taxPercent: number;
@@ -27,14 +28,18 @@ export interface CartTotals {
 
 export function calculateCartTotals(items: CartItem[], charges: CartCharges): CartTotals {
   const subtotal = items.reduce((sum, item) => sum + Number(item.price) * Number(item.qty), 0);
-  const discountAmount = subtotal * (charges.discountPercent / 100);
+  const clampedPercent = Math.min(100, Math.max(0, Number(charges.discountPercent) || 0));
+  const discountAmount =
+    charges.discountAmountOverride !== undefined && charges.discountAmountOverride >= 0
+      ? Math.min(subtotal, Math.max(0, Number(charges.discountAmountOverride) || 0))
+      : subtotal * (clampedPercent / 100);
   const deliveryCharge = charges.orderType === 'DELIVERY' ? normalizeCharge(charges.deliveryCharge) : 0;
   const packingCharge = normalizeCharge(charges.packingCharge);
   const otherCharge = normalizeCharge(charges.otherCharge);
   const taxableAmount = subtotal - discountAmount + deliveryCharge + packingCharge + otherCharge;
-  const taxAmount = taxableAmount * (charges.taxPercent / 100);
+  const taxAmount = taxableAmount * (Math.max(0, Number(charges.taxPercent) || 0) / 100);
   const loyaltyDiscount = Math.min(
-    (Number(charges.loyaltyPoints) || 0) * LOYALTY_POINT_VALUE,
+    Math.max(0, Number(charges.loyaltyPoints) || 0) * LOYALTY_POINT_VALUE,
     Math.max(0, subtotal - discountAmount),
   );
   const grandTotal = roundAmount(Math.max(0, taxableAmount + taxAmount - loyaltyDiscount));

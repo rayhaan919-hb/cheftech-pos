@@ -41,7 +41,12 @@ describe('online order mapping', () => {
   const cloud = {
     status: 'OUT_FOR_DELIVERY',
     order_type: 'DELIVERY',
-    total: 4200,
+    subtotal: 4200,
+    discount_amount: 420,
+    coupon_code: 'CHEFTECH10',
+    loyalty_redeem_points: 80,
+    loyalty_discount: 80,
+    total: 3700,
     sale_id: 17,
     created_at: '2026-09-18T23:17:49.568Z',
     out_for_delivery_at: '2026-09-18T23:20:00.000Z',
@@ -50,13 +55,18 @@ describe('online order mapping', () => {
     items: [{ id: 'MENU_1', menu_item_id: 'MENU_1', name: 'Karrahi', price: 2100, qty: 2 }],
   };
 
-  it('maps the website fields onto the local shape', () => {
+  it('maps the website fields onto the local shape including discounts and loyalty', () => {
     const order = cloudOrderToLocal('ORDER_9', cloud);
 
     expect(order.cloudId).toBe('ORDER_9');
     expect(order.status).toBe('OUT_FOR_DELIVERY');
     expect(order.orderType).toBe('DELIVERY');
-    expect(order.total).toBe(4200);
+    expect(order.subtotal).toBe(4200);
+    expect(order.discountAmount).toBe(420);
+    expect(order.couponCode).toBe('CHEFTECH10');
+    expect(order.loyaltyRedeemPoints).toBe(80);
+    expect(order.loyaltyDiscount).toBe(80);
+    expect(order.total).toBe(3700);
     expect(order.saleId).toBe(17);
     expect(order.customer).toEqual({ name: 'Ali', phone: '03001234567', address: 'Street 4' });
     expect(order.items[0]).toMatchObject({ menuItemId: 'MENU_1', qty: 2, price: 2100 });

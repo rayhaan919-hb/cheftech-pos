@@ -10,6 +10,9 @@ const SETTINGS_KEY = 'supabaseConfig';
 
 function readEnvConfig(): CloudConfig {
   const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {};
+  if (env.MODE === 'test' || env.VITEST) {
+    return { supabaseUrl: '', supabaseAnonKey: '' };
+  }
   return {
     supabaseUrl: String(env.VITE_SUPABASE_URL || '').trim().replace(/\/+$/, ''),
     supabaseAnonKey: String(env.VITE_SUPABASE_ANON_KEY || '').trim(),

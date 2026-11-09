@@ -62,14 +62,22 @@ export function OnlineOrdersModal({ username, notify, onClose, onAccept }: {
       return;
     }
 
+    const couponDisc = Math.max(0, Number(order.discountAmount) || 0);
+    const loyaltyDisc = Math.max(0, Number(order.loyaltyDiscount ?? order.loyaltyRedeemPoints) || 0);
+    const recomputedTotal = Math.max(0, check.computedSubtotal - couponDisc - loyaltyDisc);
+
     if (check.priceMismatch) {
-      await db.onlineOrders.update(order.id, { total: check.computedSubtotal });
-      notify(`Order #${order.id} prices re-verified from POS menu (${formatAmount(check.computedSubtotal)}).`);
+      await db.onlineOrders.update(order.id, { subtotal: check.computedSubtotal, total: recomputedTotal });
+      notify(`Order #${order.id} prices re-verified from POS menu (${formatAmount(recomputedTotal)}).`);
     } else {
       notify(`Order #${order.id} loaded into the cart.`);
     }
 
-    onAccept(check.items, { ...order, total: check.priceMismatch ? check.computedSubtotal : order.total });
+    onAccept(check.items, {
+      ...order,
+      subtotal: check.computedSubtotal,
+      total: check.priceMismatch ? recomputedTotal : order.total,
+    });
     await setOrderStatus(order.id, 'ACCEPTED', username);
     onClose();
   }

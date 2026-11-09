@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
-import { Download, KeyRound, Pencil, Plus, Search, Trash2, Upload, X, Cloud } from 'lucide-react';
+import { Download, KeyRound, Pencil, Plus, Search, Trash2, Upload, X, Cloud, Image as ImageIcon } from 'lucide-react';
+import { compressImageFile, formatBytes } from '../lib/imageCompressor';
 import { db } from '../lib/db';
 import { useLive } from '../lib/useLive';
 import { formatAmount, currencySymbol } from '../lib/format';
@@ -52,6 +53,8 @@ export function AdminSettingsModal({ username, notify, onClose }: {
   const [recipeRows, setRecipeRows] = useState<RecipeDraft[]>([]);
   const [importReport, setImportReport] = useState<string[] | null>(null);
   const [showCloudSetup, setShowCloudSetup] = useState(false);
+  const [compressing, setCompressing] = useState(false);
+  const [compressionStats, setCompressionStats] = useState<string | null>(null);
 
   // H-01: Change Password & Owner PIN state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -59,6 +62,7 @@ export function AdminSettingsModal({ username, notify, onClose }: {
   const [newPin, setNewPin] = useState('');
 
   const fileInput = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const categoryName = useMemo(() => {
     const map = new Map<string, string>();
@@ -83,10 +87,14 @@ export function AdminSettingsModal({ username, notify, onClose }: {
     setDraft(BLANK);
     setEditingId(null);
     setRecipeRows([]);
+    setCompressionStats(null);
+    if (imageInputRef.current) imageInputRef.current.value = '';
   }
 
   function startEdit(item: MenuItem) {
     setEditingId(item.id);
+    setCompressionStats(null);
+    if (imageInputRef.current) imageInputRef.current.value = '';
     setDraft({
       name: item.name,
       price: String(item.price ?? ''),
@@ -95,6 +103,24 @@ export function AdminSettingsModal({ username, notify, onClose }: {
       available: item.available !== false,
     });
     setRecipeRows((recipesByItem.get(item.id) || []).map((r) => ({ inventoryId: r.inventoryId, qtyRequired: String(r.qtyRequired) })));
+  }
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setCompressing(true);
+      const res = await compressImageFile(file, { maxWidth: 800, maxHeight: 800, quality: 0.82 });
+      setDraft((d) => ({ ...d, imageUrl: res.dataUrl }));
+      setCompressionStats(
+        `${formatBytes(res.originalBytes)} → ${formatBytes(res.compressedBytes)} (-${res.compressionRatio}%)`
+      );
+      notify(`Image compressed to ${formatBytes(res.compressedBytes)}.`);
+    } catch (err) {
+      notify((err as Error).message);
+    } finally {
+      setCompressing(false);
+    }
   }
 
   async function addCategory() {
@@ -361,24 +387,102 @@ export function AdminSettingsModal({ username, notify, onClose }: {
               </select>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-2 items-center">
-              <input
-                type="url"
-                value={draft.imageUrl}
-                onChange={(e) => setDraft({ ...draft, imageUrl: e.target.value })}
-                placeholder="Image URL (optional)"
-                aria-label="Dish image URL"
-                className={`${INPUT} w-full flex-1`}
-              />
-              <label className="inline-flex items-center gap-2 text-xs font-bold text-gray-700 px-2 py-1.5 shrink-0 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={draft.available}
-                  onChange={(e) => setDraft({ ...draft, available: e.target.checked })}
-                  className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                />
-                <span>Available for ordering</span>
-              </label>
+            {/* Dish Image Section with Local Auto-Compression & URL Support */}
+            <div className="space-y-2 p-3 bg-white/70 rounded-2xl border border-gray-200 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
+                  <ImageIcon className="w-3.5 h-3.5 text-purple-600" />
+                  Dish Photo
+                </span>
+                {compressing && (
+                  <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-md animate-pulse">
+                    Compressing...
+                  </span>
+                )}
+                {compressionStats && !compressing && (
+                  <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
+                    {compressionStats}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 items-center">
+                {/* Image Preview Thumbnail */}
+                <div className="relative w-16 h-16 shrink-0 rounded-xl overflow-hidden border border-gray-200 bg-gray-50 flex items-center justify-center group shadow-inner">
+                  {draft.imageUrl ? (
+                    <>
+                      <img
+                        src={draft.imageUrl}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDraft((d) => ({ ...d, imageUrl: '' }));
+                          setCompressionStats(null);
+                          if (imageInputRef.current) imageInputRef.current.value = '';
+                        }}
+                        title="Remove photo"
+                        className="absolute inset-0 bg-black/60 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-300" />
+                        <span className="text-[8px] font-bold mt-0.5">Remove</span>
+                      </button>
+                    </>
+                  ) : (
+                    <div className="text-center p-1">
+                      <ImageIcon className="w-5 h-5 text-gray-300 mx-auto mb-0.5" />
+                      <span className="text-[8px] text-gray-400 font-semibold block leading-tight">No Photo</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Upload Action & URL Fallback */}
+                <div className="flex-1 w-full space-y-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                      id="dishImageFileInput"
+                    />
+                    <label
+                      htmlFor="dishImageFileInput"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs rounded-xl border border-purple-200 cursor-pointer shadow-sm transition-colors"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{draft.imageUrl ? 'Change Photo' : 'Upload Local Image'}</span>
+                    </label>
+                    <span className="text-[10px] text-gray-400 font-medium">Auto-compressed</span>
+                  </div>
+
+                  <input
+                    type="url"
+                    value={draft.imageUrl.startsWith('data:') ? '' : draft.imageUrl}
+                    onChange={(e) => {
+                      setDraft((d) => ({ ...d, imageUrl: e.target.value }));
+                      setCompressionStats(null);
+                    }}
+                    placeholder={draft.imageUrl.startsWith('data:') ? 'Local image uploaded (or paste URL)' : 'Or paste web image URL...'}
+                    aria-label="Dish image URL"
+                    className={`${INPUT} w-full text-xs`}
+                  />
+                </div>
+
+                {/* Available for ordering toggle */}
+                <label className="inline-flex items-center gap-2 text-xs font-bold text-gray-700 px-2 py-1.5 shrink-0 cursor-pointer self-start sm:self-center">
+                  <input
+                    type="checkbox"
+                    checked={draft.available}
+                    onChange={(e) => setDraft((d) => ({ ...d, available: e.target.checked }))}
+                    className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                  />
+                  <span>Available</span>
+                </label>
+              </div>
             </div>
 
             <div className="border-t border-gray-100 pt-2 space-y-1.5">

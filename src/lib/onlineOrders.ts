@@ -129,9 +129,13 @@ export async function verifyOnlineOrder(order: OnlineOrder): Promise<OnlineOrder
     (sum, line) => sum + (Number(line.price) || 0) * (Number(line.qty) || 1),
     0
   );
-  const priceMismatch = Math.abs(computedSubtotal - reportedItemsTotal) > 0.01;
+  const expectedSubtotal = Number(order.subtotal) > 0 ? Number(order.subtotal) : reportedItemsTotal;
+  const priceMismatch = Math.abs(computedSubtotal - expectedSubtotal) > 0.01;
   const stockError = await verifyStock(items);
-  const effectiveTotal = Math.min(computedSubtotal, Number(order.total) || computedSubtotal);
+  const couponDisc = Math.max(0, Number(order.discountAmount) || 0);
+  const loyaltyDisc = Math.max(0, Number(order.loyaltyDiscount ?? order.loyaltyRedeemPoints) || 0);
+  const computedNetTotal = Math.max(0, computedSubtotal - couponDisc - loyaltyDisc);
+  const effectiveTotal = Number(order.total) > 0 ? Math.min(computedNetTotal, Number(order.total)) : computedNetTotal;
   const belowDeliveryMinimum =
     order.orderType === 'DELIVERY' && effectiveTotal < MIN_DELIVERY_ORDER;
 

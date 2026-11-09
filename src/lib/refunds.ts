@@ -28,9 +28,14 @@ export function remainingQty(line: CartItem): number {
  */
 function paidRatio(sale: Sale): number {
   const gross = (sale.items || []).reduce((sum, line) => sum + (Number(line.qty) || 0) * (Number(line.price) || 0), 0);
+  if (gross <= 0) return 1;
+  const explicitDiscount = (Number(sale.discountAmount) || 0) + (Number(sale.loyaltyDiscount) || 0);
+  if (explicitDiscount > 0) {
+    return Math.max(0, Math.min(1, (gross - explicitDiscount) / gross));
+  }
   const total = Number(sale.total) || 0;
   // Extra charges (delivery, tax) push the bill above the lines and are not refunded per item.
-  return gross > 0 && total > 0 && total < gross ? total / gross : 1;
+  return total > 0 && total < gross ? total / gross : 1;
 }
 
 export function refundableTotal(sale: Sale): number {

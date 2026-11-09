@@ -138,7 +138,11 @@ function CustomerHistory({ customer, onBack, onUpdate }: { customer: Customer; o
           />
           <button
             type="button"
-            onClick={() => onUpdate({ ...customer, name: customer.name || '' })}
+            onClick={async () => {
+              const updated = { ...customer, name: (customer.name || '').trim(), updatedAt: new Date().toISOString() };
+              await db.customers.put(updated);
+              onUpdate(updated);
+            }}
             className="text-[10px] px-2 py-1 bg-purple-100 text-purple-800 rounded-lg min-h-9"
           >
             Save

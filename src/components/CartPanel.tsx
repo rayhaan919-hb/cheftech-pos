@@ -211,7 +211,11 @@ export function CartPanel({
               max={100}
               value={discountPercent}
               onChange={(e) =>
-                onChange({ ...charges, discountPercent: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })
+                onChange({
+                  ...charges,
+                  discountPercent: Math.min(100, Math.max(0, Number(e.target.value) || 0)),
+                  discountAmountOverride: undefined,
+                })
               }
               className="w-14 py-1 min-h-8 text-right font-semibold text-sm border-0 focus:outline-none text-[#000000] bg-transparent"
             />

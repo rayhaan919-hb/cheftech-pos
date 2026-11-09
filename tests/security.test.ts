@@ -7,6 +7,9 @@ const memMenu = new Map<string, any>();
 const memInventory = new Map<string, any>();
 const memRecipes: any[] = [];
 const memAuditLogs: any[] = [];
+const memSales: any[] = [];
+const memCustomers: any[] = [];
+const memExpenses: any[] = [];
 
 vi.mock('../src/lib/db', () => {
   return {
@@ -59,12 +62,20 @@ vi.mock('../src/lib/db', () => {
       inventory: {
         get: async (id: string) => memInventory.get(id),
         toArray: async () => Array.from(memInventory.values()),
+        put: async (row: any) => {
+          memInventory.set(row.id, row);
+          return row.id;
+        },
         clear: async () => {
           memInventory.clear();
         },
       },
       recipes: {
         toArray: async () => [...memRecipes],
+        add: async (row: any) => {
+          memRecipes.push(row);
+          return memRecipes.length;
+        },
         where: (field: string) => ({
           equals: (val: any) => ({
             toArray: async () => memRecipes.filter((r) => r[field] === val),
@@ -72,6 +83,33 @@ vi.mock('../src/lib/db', () => {
         }),
         clear: async () => {
           memRecipes.length = 0;
+        },
+      },
+      sales: {
+        toArray: async () => [...memSales],
+        add: async (row: any) => {
+          const id = memSales.length + 1;
+          memSales.push({ ...row, id });
+          return id;
+        },
+        clear: async () => {
+          memSales.length = 0;
+        },
+      },
+      customers: {
+        toArray: async () => [...memCustomers],
+        clear: async () => {
+          memCustomers.length = 0;
+        },
+      },
+      expenses: {
+        toArray: async () => [...memExpenses],
+        add: async (row: any) => {
+          memExpenses.push(row);
+          return memExpenses.length;
+        },
+        clear: async () => {
+          memExpenses.length = 0;
         },
       },
       auditLogs: {
@@ -119,6 +157,8 @@ import {
 } from '../src/lib/auth';
 import { verifyOnlineOrder } from '../src/lib/onlineOrders';
 import { configManager } from '../src/lib/config';
+import { getAnalytics, getPeriodSummary, getPnl } from '../src/lib/analytics';
+import { buildShiftReport, setOpeningCash } from '../src/lib/shift';
 
 describe('security & audit fixes', () => {
   beforeEach(async () => {
@@ -127,6 +167,9 @@ describe('security & audit fixes', () => {
     await db.menu.clear();
     await db.inventory.clear();
     await db.recipes.clear();
+    await (db.sales as any).clear();
+    await (db.customers as any).clear();
+    await (db.expenses as any).clear();
     sessionStorage.clear();
     localStorage.clear();
   });
@@ -229,5 +272,82 @@ describe('security & audit fixes', () => {
       status: 'PENDING',
     });
     expect(unavailableCheck.unavailableItems).toEqual(['Sold Out Wings']);
+
+    // 3. Valid website coupon discount does NOT falsely trigger priceMismatch, and enforces post-discount delivery min
+    const couponOrderCheck = await verifyOnlineOrder({
+      createdAt: new Date().toISOString(),
+      customer: { name: 'Sara', phone: '03009998877', address: 'DHA Phase 5' },
+      orderType: 'DELIVERY',
+      items: [{ id: 'm1', menuItemId: 'm1', name: 'Zinger Burger', price: 600, qty: 1 }],
+      subtotal: 600,
+      discountAmount: 60,
+      couponCode: 'CHEFTECH10',
+      total: 540,
+      status: 'PENDING',
+    });
+    expect(couponOrderCheck.priceMismatch).toBe(false);
+    expect(couponOrderCheck.belowDeliveryMinimum).toBe(false);
+  });
+
+  it('deducts refunds from Analytics, Period Summary, P&L, and Shift Summary, and tracks COGS on modified items', async () => {
+    await (db.inventory as any).put({ id: 'inv_patty', name: 'Chicken Patty', unit: 'pcs', stock: 50, cost: 120 });
+    await (db.recipes as any).add({ menuItemId: 'm1', inventoryId: 'inv_patty', qtyRequired: 1 });
+    await setOpeningCash(1000);
+
+    const nowIso = new Date().toISOString();
+    // Sale 1: 2x Zinger Burger (modified id m1::Size:Large, menuItemId m1) @ Rs 800 = Rs 1600, with 1 refunded (Rs 800 refunded)
+    await (db.sales as any).add({
+      timestamp: nowIso,
+      orderType: 'DINE_IN',
+      serverUser: 'owner',
+      items: [{ id: 'm1::Size:Large', menuItemId: 'm1', name: 'Zinger Burger (Large)', price: 800, qty: 2, refundedQty: 1 }],
+      subtotal: 1600,
+      discountPercent: 0,
+      discountAmount: 0,
+      deliveryCharge: 0,
+      packingCharge: 0,
+      taxPercent: 0,
+      taxAmount: 0,
+      otherCharge: 0,
+      total: 1600,
+      refundedAmount: 800,
+      refundStatus: 'PARTIAL',
+      payments: [{ method: 'Cash', amount: 1600, cashGiven: 2000, change: 400 }],
+      totalReceived: 2000,
+      totalChange: 400,
+    });
+
+    await (db.expenses as any).add({
+      timestamp: nowIso,
+      amount: 200,
+      category: 'Supplies',
+      description: 'Packaging',
+      serverUser: 'owner',
+      status: 'APPROVED',
+      paymentMethod: 'Cash Drawer',
+    });
+
+    const summary = await getPeriodSummary();
+    expect(summary.todaySales).toBe(800);
+    expect(summary.totalOverallSales).toBe(800);
+
+    const analytics = await getAnalytics('day');
+    expect(analytics.topItems[0]?.metric).toBe(1); // 2 sold minus 1 refunded = 1 net sold
+
+    const todayStr = nowIso.slice(0, 10);
+    const pnl = await getPnl(todayStr, todayStr);
+    expect(pnl.sales).toBe(800);
+    expect(pnl.expenses).toBe(200);
+    expect(pnl.net).toBe(600);
+
+    const shift = await buildShiftReport();
+    expect(shift.totalSales).toBe(800);
+    expect(shift.dineIn).toBe(800);
+    // Cash collected 2000 - change 400 - cash refunded 800 = netCash 800; + openingCash 1000 = 1800
+    expect(shift.netCash).toBe(800);
+    expect(shift.expectedDrawerCash).toBe(1800);
+    // 1 net unrefunded modified burger consumed 1 patty @ Rs 120 = Rs 120 COGS
+    expect(shift.consumedCost).toBe(120);
+    expect(shift.grossProfit).toBe(680);
   });
 });

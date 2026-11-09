@@ -328,9 +328,10 @@ export function generateEscPosReceipt(sale: Sale, settings: PrinterSettings): Ui
       encoder.text(label + ' '.repeat(space) + val);
     };
 
-    if (sale.discountAmount || sale.deliveryCharge || sale.packingCharge || sale.taxAmount || sale.otherCharge) {
+    if (sale.discountAmount || sale.loyaltyDiscount || sale.deliveryCharge || sale.packingCharge || sale.taxAmount || sale.otherCharge) {
       extraRow('Subtotal', sale.subtotal);
       if (sale.discountAmount) extraRow(`Discount (${sale.discountPercent || 0}%)`, sale.discountAmount, '-');
+      if (sale.loyaltyDiscount) extraRow('Loyalty Discount', sale.loyaltyDiscount, '-');
       extraRow('Delivery Charge', sale.deliveryCharge);
       extraRow('Packing Charge', sale.packingCharge);
       extraRow(`Tax (${sale.taxPercent || 0}%)`, sale.taxAmount);
@@ -445,6 +446,7 @@ export function receiptLines(sale: Sale, settings: PrinterSettings = DEFAULT_PRI
   const rows: [string, number][] = [
     ['Subtotal', sale.subtotal],
     ...(sale.discountAmount ? [[`Discount ${sale.discountPercent || 0}%`, -sale.discountAmount] as [string, number]] : []),
+    ...(sale.loyaltyDiscount ? [['Loyalty Discount', -sale.loyaltyDiscount] as [string, number]] : []),
     ...(sale.deliveryCharge ? [['Delivery', sale.deliveryCharge] as [string, number]] : []),
     ...(sale.packingCharge ? [['Packing', sale.packingCharge] as [string, number]] : []),
     ...(sale.taxAmount ? [[`Tax ${sale.taxPercent || 0}%`, sale.taxAmount] as [string, number]] : []),
@@ -588,6 +590,7 @@ export function receiptDocument(sale: Sale, settings: PrinterSettings): string {
     ? `<div class="totals-block">
     ${totalRow('Subtotal', sale.subtotal)}
     ${totalRow(`Discount ${sale.discountPercent || 0}%`, sale.discountAmount, '-')}
+    ${totalRow('Loyalty discount', sale.loyaltyDiscount || 0, '-')}
     ${totalRow('Delivery charge', sale.deliveryCharge)}
     ${totalRow('Packing charge', sale.packingCharge)}
     ${totalRow(`Tax ${sale.taxPercent || 0}%`, sale.taxAmount)}
